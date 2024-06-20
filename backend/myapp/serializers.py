@@ -36,3 +36,4 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = UserProfile
         fields = ['user', 'profile_image']
 
+

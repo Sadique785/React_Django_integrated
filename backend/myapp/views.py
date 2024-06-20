@@ -1,6 +1,8 @@
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from rest_framework import generics, permissions, viewsets, status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -57,6 +59,23 @@ class LoginView(APIView):
         
         login(request, user)
 
+        # From here JWT things begins
+
+        refresh = RefreshToken.for_user(user)
+        print(refresh)
+        user_info = {
+            'username':user.username,
+            'email':user.email,
+            'first_name':user.first_name,
+            'last_name': user.last_name,
+        }
+
+        return Response({
+            'refresh':str(refresh),
+            'access':str(refresh.access_token),
+            'userInfo':user_info,
+        },status=status.HTTP_200_OK)
+
         return Response({'status': 'Successfully logged in.'}, status=status.HTTP_200_OK)
 
 
@@ -83,3 +102,43 @@ class UserRegisterView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UpdateProfileImage(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user_profile = self.get_user_profile(request.user)
+        data = request.data.copy()
+        data['user'] = request.user.id
+
+        serializer = UserProfileSerializer(user_profile, data=data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+
+            picture_url = request.build_absolute_uri(serializer.data['profile_image'])
+            return Response({'message': "Profile image updated successfully",
+                             'pictureURL': picture_url}, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # profile_image = request.FILES.get('profile_image')
+
+        # if profile_image:
+        #     user_profile.profile_image = profile_image
+        #     user_profile.save()
+
+        #     picture_url = request.build_absolute_uri(user_profile.profile_image.url)
+
+        #     return Response({'message': "Profile image updated Successfully",
+        #                      'picutreURL':picture_url},status=status.HTTP_200_OK )
+        
+        # else:
+        #     return Response({"error": "No image uploaded"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+    def get_user_profile(self,user):
+        profile, created = UserProfile.objects.get_or_create(user = user)
+        return profile
